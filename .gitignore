@@ -1,0 +1,5 @@
+# Build output
+/price-fetcher
+
+# Local env (contains credentials)
+.env
