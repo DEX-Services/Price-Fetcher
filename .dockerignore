@@ -1,0 +1,9 @@
+# Keep secrets and unrelated files out of the Docker build context.
+.env
+.git
+.gitignore
+.gitattributes
+*.log
+scripts/
+Dockerfile
+.dockerignore
