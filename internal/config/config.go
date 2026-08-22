@@ -43,9 +43,7 @@ type Config struct {
 // DefaultAssets is the tracked set when ASSETS is not provided. Mirrors the
 // crypto perps shown in the frontend market list.
 var DefaultAssets = []string{
-	"BTC", "ETH", "SOL", "BNB", "XRP", "ADA",
-	"DOGE", "AVAX", "LINK", "MATIC", "ARB", "SUI",
-	"TIA", "PEPE",
+	"BTC", "ETH", "SOL", "BNB",
 }
 
 // Load reads configuration from the environment, applying defaults.
