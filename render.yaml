@@ -1,70 +1,53 @@
-# Render Blueprint for the Price-Fetcher (Option A: native Go build, Background Worker).
+# Render Blueprint for the Price-Fetcher (Docker runtime).
 #
 # When you connect this repo to Render as a "Blueprint", Render reads this file
-# and provisions everything automatically: the service, build/start commands,
-# health check, instance type, and environment variables — no manual dashboard
-# config required.
+# and provisions everything automatically: the service, Docker build, health
+# check, instance type, and environment variables — no manual dashboard config.
+#
+# WHY DOCKER (and not runtime: go):
+#   Render's native Go builder runs `go build -o app` on the whole module from
+#   the repo root. This project's main package lives in ./cmd/fetcher, and the
+#   root has no .go files, so that build fails with
+#   "no Go files in /opt/render/project/go/src/github.com/DEX-Services/...".
+#   A Dockerfile lets us build exactly ./cmd/fetcher and pin a Go version.
 #
 # Deploy:
-#   1. Push this repo to GitHub/GitLab/Bitbucket (secrets stay OUT of the repo,
-#      see .gitignore; this file references them as env vars).
-#   2. In Render: New > Blueprint, pick the repo, hit Apply.
-#   3. On first apply, Render asks for the secret values below (REDIS_SERVICE_URI
-#      etc.) because they have no default. It stores them as encrypted env vars.
-#   4. For any later secret rotation, use `./scripts/render-sync.sh` or the
-#      dashboard Environment section.
-#
-# This is a long-running daemon (holds a WebSocket to Binance + TLS to Redis),
-# so it is a Background Worker, NOT a web service.
+#   1. Push this repo to GitHub/GitLab/Bitbucket. Secrets stay OUT of the repo
+#      (.env is gitignored); this file references them as env vars, and Render
+#      prompts for REDIS_SERVICE_URI on first apply.
+#   2. In Render: New > Blueprint, pick the repo, Apply.
+#   3. Rotate secrets later with ./scripts/render-cli.sh env-sync (Render CLI).
 
 services:
-  # Human-readable name shown in the Render dashboard.
   - type: worker
     name: price-fetcher
 
-    # Directory containing this blueprint, relative to the repo root.
-    # If Price-Fetcher IS the repo root, keep this as "" and the build/runtime
-    # paths pointing into the repo. Adjust if the folder is nested.
+    # Repo root for this blueprint. The repo IS the Price-Fetcher project.
     rootDir: .
 
-    # Runtime: local Go toolchain build (Option A). No Dockerfile needed.
-    runtime: go
+    # Docker runtime -> builds the Dockerfile in rootDir and runs its CMD.
+    runtime: docker
 
-    # Build the binary without CGO so it runs clean on Render's linux base.
-    buildCommand: CGO_ENABLED=0 go build -o price-fetcher ./cmd/fetcher
-
-    # -timeout: connected to Binance, so the WS connection makes it look "long running".
-    # Binance's @ticker pushes roughly ~1/sec per asset, so latest prices stay fresh.
-    startCommand: ./price-fetcher
-
-    # Keep this instance running 24/7: a streaming worker must never auto-sleep.
-    # Change to "free" only if you accept pauses (the WS + Redis connection
-    # would drop and reconnect on wake, and prices go stale while paused).
+    # Keep this streaming daemon always on: it must hold the WebSocket to
+    # Binance and the TLS connection to Redis 24/7. A "free" instance auto-sleeps
+    # and would drop both, leaving prices stale.
     plan: starter
-
-    # Bring up at least one and don't scale to zero.
     numInstances: 1
 
-    # === Health check ===
-    # Render probes this endpoint; 200 = healthy, 503 = feed stale (no fresh
-    # price in <30s). Render uses the result to restart a stalled instance.
+    # Render probes this and restarts the worker when the feed is stale
+    # (the fetcher returns 200 while fresh, 503 after ~30s with no update).
     healthCheckPath: /healthz
 
-    # === Access ===
-    # A Background Worker has no public URL by design; it only talks outbound
-    # (to Binance and Redis). No autoDeploy branch restriction:
     autoDeploy: true
     branch: main
 
-    # Pull env from an .env in the repo dir if present (local convenience only;
-    # does NOT contain secrets — .env is gitignored). Secret-critical variables
-    # below are declared as required env vars Render prompts for.
+    # === Environment ===
+    # REDIS_SERVICE_* required. On first Blueprint apply Render prompts for the
+    # value because it has no secret-default here (never commit the real URI).
     envVars:
-      # Required — the Aiven Redis TLS URI. Set as a Secret on first deploy.
       - key: REDIS_SERVICE_URI
         sync: false
         value: rediss://MY-PLACEHOLDER
-      # Optional; sensible defaults in code. Declared so they are visible/overridable.
       - key: ASSETS
         value: BTC,ETH,SOL,BNB
       - key: PRICE_QUOTE
