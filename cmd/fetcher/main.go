@@ -71,10 +71,35 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	st, err := store.New(ctx, cfg.RedisURI, cfg.KeyPrefix, cfg.StaleTTL, log)
-	if err != nil {
-		log.Error("failed to connect to redis", "err", err)
-		os.Exit(1)
+	// Connect with bounded retries: fresh instances and platform restarts can
+	// hit transient DNS/TLS hiccups against the managed Redis host (seen as
+	// "lookup ...: i/o timeout" on Render), and a single failed ping must not
+	// kill the deploy. Gives up after ~95s of consecutive failures.
+	var (
+		st  *store.Store
+		err error
+	)
+	connectBackoff := time.Second
+	for attempt := 1; ; attempt++ {
+		st, err = store.New(ctx, cfg.RedisURI, cfg.KeyPrefix, cfg.StaleTTL, log)
+		if err == nil {
+			break
+		}
+		if ctx.Err() != nil || attempt >= 12 {
+			log.Error("failed to connect to redis", "err", err, "attempts", attempt)
+			os.Exit(1)
+		}
+		log.Warn("redis connect failed, retrying",
+			"err", err, "attempt", attempt, "backoff", connectBackoff)
+		select {
+		case <-ctx.Done():
+			os.Exit(1)
+		case <-time.After(connectBackoff):
+		}
+		connectBackoff *= 2
+		if connectBackoff > 10*time.Second {
+			connectBackoff = 10 * time.Second
+		}
 	}
 	defer st.Close()
 
@@ -89,6 +114,9 @@ func main() {
 	// channels, and health tracking treat every asset identically.
 	onPrice := func(p price.IndexPrice) {
 		if err := st.Publish(ctx, p); err != nil {
+			if ctx.Err() != nil {
+				return // shutting down: in-flight publishes are expected to fail
+			}
 			log.Warn("failed to publish price", "asset", p.Asset, "err", err)
 			return
 		}

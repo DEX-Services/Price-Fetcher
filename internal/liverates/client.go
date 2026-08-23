@@ -140,6 +140,9 @@ func (c *Client) Run(ctx context.Context, onPrice func(price.IndexPrice)) {
 func (c *Client) pollOnce(ctx context.Context, onPrice func(price.IndexPrice)) {
 	quotes, err := c.fetch(ctx)
 	if err != nil {
+		if ctx.Err() != nil {
+			return // shutdown cancellation is not an operational fault
+		}
 		c.log.Warn("live-rates fetch failed", "err", err)
 		return
 	}

@@ -84,12 +84,22 @@ func Load() Config {
 		Quote:            envOr("PRICE_QUOTE", "USDT"),
 		KeyPrefix:        envOr("PRICE_KEY_PREFIX", "price"),
 		StaleTTL:         envDuration("PRICE_STALE_TTL", 30*time.Second),
-		HealthAddr:       envOr("PRICE_HEALTH_ADDR", ":8083"),
+		HealthAddr:       healthAddr(),
 		LiveRatesAPIKey:  strings.TrimSpace(os.Getenv("LIVERATES_API_KEY")),
 		LiveRatesBaseURL: envOr("LIVERATES_BASE_URL", "https://www.live-rates.com"),
 		Instruments:      parseInstruments(os.Getenv("LIVERATES_INSTRUMENTS")),
 		LiveRatesPoll:    envDuration("LIVERATES_POLL_INTERVAL", 2*time.Second),
 	}
+}
+
+// healthAddr resolves the /healthz listen address. PaaS platforms like Render
+// tell us which port to bind via $PORT — honoring it keeps platform routing
+// and health probes working; PRICE_HEALTH_ADDR remains the local default.
+func healthAddr() string {
+	if p := strings.TrimSpace(os.Getenv("PORT")); p != "" {
+		return ":" + strings.TrimPrefix(p, ":")
+	}
+	return envOr("PRICE_HEALTH_ADDR", ":8083")
 }
 
 // parseAssets splits a comma-separated ASSETS list, upper-casing and trimming

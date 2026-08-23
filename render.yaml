@@ -19,7 +19,13 @@
 #   3. Rotate secrets later with ./scripts/render-cli.sh env-sync (Render CLI).
 
 services:
-  - type: worker
+  # WEB SERVICE (not worker): the fetcher exposes GET /healthz on its listen
+  # port, and Render only supports ports + healthCheckPath on web services.
+  # As a worker, binding :8083 triggered "new primary port detected" restart
+  # churn on every deploy. Starter-plan web services stay awake 24/7 like
+  # workers (only the free tier auto-sleeps), so the long-lived Binance
+  # WebSocket and TLS Redis connection behave identically.
+  - type: web
     name: price-fetcher
 
     # Repo root for this blueprint. The repo IS the Price-Fetcher project.
@@ -34,8 +40,9 @@ services:
     plan: starter
     numInstances: 1
 
-    # Render probes this and restarts the worker when the feed is stale
-    # (the fetcher returns 200 while fresh, 503 after ~30s with no update).
+    # Render probes /healthz on the service port: 200 while at least one feed
+    # published a fresh (<30s) price, 503 once stale — so an unhealthy deploy
+    # is caught before it goes live.
     healthCheckPath: /healthz
 
     autoDeploy: true
@@ -59,6 +66,8 @@ services:
         value: "30"
       - key: PRICE_HEALTH_ADDR
         value: ":8083"
+      # NOTE: on Render web services the platform-provided $PORT wins over
+      # PRICE_HEALTH_ADDR (the fetcher binds ":" + PORT when PORT is set).
       # Live-Rates.com supplies all NON-crypto instruments (FX majors, metals,
       # energy, US stocks). The key is a secret: sync:false makes Render prompt
       # for it on first apply instead of storing anything here.
