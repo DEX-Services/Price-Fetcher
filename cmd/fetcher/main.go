@@ -1,6 +1,11 @@
-// Command price-fetcher streams live index prices from Binance and publishes
-// them to Redis, giving every other service (backend, matching engine, bots,
+// Command price-fetcher streams live index prices and publishes them to
+// Redis, giving every other service (backend, matching engine, bots,
 // frontend API) a single shared source of truth for the INDEX price.
+//
+// Two upstream feeds, one Redis contract:
+//   - Crypto (BTC, ETH, …) streams from Binance's combined WebSocket.
+//   - Non-crypto instruments (FX majors, GOLD/SILVER, CrudeOIL, US stocks)
+//     are polled from the Live-Rates.com REST API.
 //
 // This price is used for mark price, funding, and liquidation reference. It is
 // deliberately separate from the order-book last-trade price, which is owned by
@@ -10,10 +15,12 @@
 //
 //	price-fetcher            # reads config from environment / .env
 //
-// Required env:  REDIS_SERVICE_URI
-// Optional env:  ASSETS, PRICE_QUOTE, PRICE_KEY_PREFIX, PRICE_STALE_TTL,
+// Required env:  REDIS_SERVICE_URI, LIVERATES_API_KEY
+// Optional env:  ASSETS (crypto), PRICE_QUOTE, PRICE_KEY_PREFIX,
 //
-//	PRICE_HEALTH_ADDR
+//	PRICE_STALE_TTL, PRICE_HEALTH_ADDR,
+//	LIVERATES_INSTRUMENTS, LIVERATES_BASE_URL,
+//	LIVERATES_POLL_INTERVAL
 package main
 
 import (
@@ -29,6 +36,7 @@ import (
 
 	"github.com/dex/price-fetcher/internal/binance"
 	"github.com/dex/price-fetcher/internal/config"
+	"github.com/dex/price-fetcher/internal/liverates"
 	"github.com/dex/price-fetcher/internal/price"
 	"github.com/dex/price-fetcher/internal/store"
 	"github.com/joho/godotenv"
@@ -44,11 +52,20 @@ func main() {
 
 	cfg := config.Load()
 	log.Info("price-fetcher starting",
-		"assets", cfg.Assets,
+		"crypto_assets", cfg.Assets,
+		"instruments", cfg.Instruments,
 		"quote", cfg.Quote,
 		"key_prefix", cfg.KeyPrefix,
 		"health_addr", cfg.HealthAddr,
 	)
+
+	// Fail fast rather than silently serving half the catalog: consumers key
+	// liquidation logic off these prices, so a missing feed must be loud.
+	if len(cfg.Instruments) > 0 && cfg.LiveRatesAPIKey == "" {
+		log.Error("LIVERATES_API_KEY is required: non-crypto instruments are tracked via Live-Rates.com",
+			"instruments", cfg.Instruments)
+		os.Exit(1)
+	}
 
 	// Root context cancelled on SIGINT/SIGTERM for graceful shutdown.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -66,10 +83,10 @@ func main() {
 	health := newHealthTracker()
 	go serveHealth(cfg, health, log)
 
-	client := binance.New(cfg.Assets, cfg.Quote, log)
-
-	// onPrice is called for every normalized tick. Publishing to Redis is fast
-	// (single pipeline), so we do it inline; failures are logged, not fatal.
+	// onPrice is called for every normalized tick from EITHER feed. Publishing
+	// to Redis is fast (single pipeline), so we do it inline; failures are
+	// logged, not fatal. Both feeds funnel through here, so Redis keys,
+	// channels, and health tracking treat every asset identically.
 	onPrice := func(p price.IndexPrice) {
 		if err := st.Publish(ctx, p); err != nil {
 			log.Warn("failed to publish price", "asset", p.Asset, "err", err)
@@ -78,7 +95,18 @@ func main() {
 		health.mark(p.Asset, p.Last)
 	}
 
+	// Non-crypto instruments poll Live-Rates.com in their own goroutine; the
+	// loop stops when ctx is cancelled on shutdown.
+	if len(cfg.Instruments) > 0 {
+		lrClient := liverates.New(
+			cfg.Instruments, cfg.LiveRatesAPIKey, cfg.LiveRatesBaseURL,
+			cfg.LiveRatesPoll, log,
+		)
+		go lrClient.Run(ctx, onPrice)
+	}
+
 	// Run blocks until ctx is cancelled, reconnecting internally on failure.
+	client := binance.New(cfg.Assets, cfg.Quote, log)
 	client.Run(ctx, onPrice)
 
 	log.Info("price-fetcher shutting down")

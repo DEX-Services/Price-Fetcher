@@ -45,6 +45,7 @@ services:
     # REDIS_SERVICE_* required. On first Blueprint apply Render prompts for the
     # value because it has no secret-default here (never commit the real URI).
     envVars:
+      # ASSETS = crypto only (streamed from Binance's WebSocket).
       - key: REDIS_SERVICE_URI
         sync: false
         value: rediss://MY-PLACEHOLDER
@@ -58,6 +59,16 @@ services:
         value: "30"
       - key: PRICE_HEALTH_ADDR
         value: ":8083"
+      # Live-Rates.com supplies all NON-crypto instruments (FX majors, metals,
+      # energy, US stocks). The key is a secret: sync:false makes Render prompt
+      # for it on first apply instead of storing anything here.
+      - key: LIVERATES_API_KEY
+        sync: false
+      # Case-sensitive: must match the provider catalog exactly.
+      - key: LIVERATES_INSTRUMENTS
+        value: EURUSD,GBPUSD,AUDUSD,GOLD,SILVER,CrudeOIL,AAPL.us,TSLA.us,NVDA.us
+      - key: LIVERATES_POLL_INTERVAL
+        value: "2"
 
     # === Logs ===
     # The fetcher uses log/slog to stdout; Render captures it automatically.

@@ -1,9 +1,15 @@
 # Price-Fetcher
 
-A small standalone service that streams live **index prices** from Binance and
-publishes them to Redis, so every other service (backend, matching engine, bots,
-frontend API) reads **one shared price** instead of each hitting Binance
-independently.
+A small standalone service that streams live **index prices** into Redis, so
+every other service (backend, matching engine, bots, frontend API) reads **one
+shared price** instead of each hitting upstream providers independently.
+
+Two feeds, one Redis contract:
+
+- **Crypto** (BTC, ETH, SOL, BNB) — Binance combined WebSocket stream.
+- **FX / metals / energy / US stocks** (EURUSD, GBPUSD, AUDUSD, GOLD, SILVER,
+  CrudeOIL, AAPL.us, TSLA.us, NVDA.us) — [Live-Rates.com](https://live-rates.com)
+  REST API: one request carries every instrument, polled every ~2s.
 
 ## Why this exists
 
@@ -26,13 +32,24 @@ turn the exchange into a mirror with no real liquidity.
 ## How it works
 
 ```
-Binance combined WS stream ──> price-fetcher ──> Redis ──> backend / engine / bots / frontend
-   (<ASSET>usdt@ticker)          (this service)   (SET + PUBLISH)
+Binance combined WS stream ──────┐
+  (crypto: <ASSET>usdt@ticker)   │
+                                 ├──> price-fetcher ──> Redis ──> backend / engine / bots / frontend
+Live-Rates.com REST /api/price ──┘    (this service)    (SET + PUBLISH)
+  (FX/metals/oil/stocks)
 ```
 
-- One WebSocket connection carries all tracked assets (combined stream), with
-  automatic reconnect + exponential backoff and ping/pong keepalive.
-- For each tick it writes to Redis in a single pipeline:
+- Crypto rides ONE WebSocket connection (combined stream) with automatic
+  reconnect + exponential backoff and ping/pong keepalive.
+- Non-crypto instruments poll Live-Rates.com `/api/price` every
+  `LIVERATES_POLL_INTERVAL` (default 2s → ~0.5 req/s, safely under their
+  1 req/s fair-use throttle). The published index price is the **bid/ask
+  mid**; `change_percent` is vs the session open; `quote_volume` is always 0
+  (not provided by live-rates).
+- Instrument symbols are CASE-SENSITIVE at live-rates (`CrudeOIL`, not
+  `CRUDEOIL`; `AAPL.us`, not `aapl.us`). FX quotes echo back slashed
+  (`EUR/USD`) but are matched and published as `EURUSD`.
+- For each tick from either feed it writes to Redis in a single pipeline:
   - `SET  price:<ASSET>` → JSON, with a short TTL (default 30s).
   - `PUBLISH price.<ASSET>` → JSON, for push consumers.
 
@@ -57,6 +74,10 @@ Binance combined WS stream ──> price-fetcher ──> Redis ──> backend /
 threshold, treat the price as stale — in particular, do NOT liquidate on a
 frozen price. The key TTL is a backstop; the timestamp is the real guard.
 
+Note for non-crypto assets: FX and equities only move during market hours —
+outside sessions the quote freezes while `timestamp_ms` keeps advancing (it
+records fetch time, not venue time). Factor that into freshness logic.
+
 ## Configuration
 
 All via environment (or a local `.env`). Only `REDIS_SERVICE_URI` is required.
@@ -64,11 +85,15 @@ All via environment (or a local `.env`). Only `REDIS_SERVICE_URI` is required.
 | Var | Default | Meaning |
 |---|---|---|
 | `REDIS_SERVICE_URI` | — | `rediss://` (TLS) or `redis://` connection string |
-| `ASSETS` | built-in list | Comma-separated base symbols, e.g. `BTC,ETH,SOL` |
+| `ASSETS` | built-in list | **Crypto** base symbols (Binance), e.g. `BTC,ETH,SOL` |
 | `PRICE_QUOTE` | `USDT` | Binance quote asset for stream names |
 | `PRICE_KEY_PREFIX` | `price` | Namespace for keys (`price:BTC`) / channels (`price.BTC`) |
 | `PRICE_STALE_TTL` | `30` | Latest-key TTL; seconds (`30`) or duration (`30s`) |
 | `PRICE_HEALTH_ADDR` | `:8083` | Listen address for `/healthz` |
+| `LIVERATES_API_KEY` | — | Live-Rates.com API key (**required**) — supplies all non-crypto instruments |
+| `LIVERATES_INSTRUMENTS` | built-in list | Non-crypto symbols, **case-sensitive**: `EURUSD,GOLD,CrudeOIL,AAPL.us…` |
+| `LIVERATES_BASE_URL` | `https://www.live-rates.com` | API base; pin `eu.`/`us.`/`as.` regional host for lower latency |
+| `LIVERATES_POLL_INTERVAL` | `2` | REST poll cadence; seconds (`2`) or duration (`2s`) |
 
 ## Run
 

@@ -38,23 +38,57 @@ type Config struct {
 
 	// HealthAddr is the listen address for the /healthz endpoint.
 	HealthAddr string
+
+	// LiveRatesAPIKey authenticates calls to Live-Rates.com, which supplies
+	// every NON-crypto instrument (FX majors, GOLD/SILVER, CrudeOIL, US
+	// stocks). Required whenever Instruments is non-empty (the default).
+	LiveRatesAPIKey string
+
+	// LiveRatesBaseURL overrides the API base URL. Empty/unset uses the
+	// geo-routed apex; pin a region (eu/us/as.live-rates.com) for lower
+	// latency at the cost of automatic fail-over.
+	LiveRatesBaseURL string
+
+	// Instruments is the list of non-crypto symbols fetched from
+	// Live-Rates.com, e.g. ["EURUSD","GOLD","AAPL.us"]. Case matters: the
+	// provider rejects "CRUDEOIL"/"aapl.us".
+	Instruments []string
+
+	// LiveRatesPoll is the REST polling cadence. One request carries ALL
+	// instruments; keep the average below ~1 req/s (the provider's fair-use
+	// throttle window).
+	LiveRatesPoll time.Duration
 }
 
-// DefaultAssets is the tracked set when ASSETS is not provided. Mirrors the
-// crypto perps shown in the frontend market list.
+// DefaultAssets is the tracked crypto set (served by Binance) when ASSETS is
+// not provided. Mirrors the crypto perps shown in the frontend market list.
 var DefaultAssets = []string{
 	"BTC", "ETH", "SOL", "BNB",
+}
+
+// DefaultInstruments is the NON-crypto set (served by Live-Rates.com) when
+// LIVERATES_INSTRUMENTS is not provided: FX majors, precious metals, energy,
+// and US stocks. Case is significant — symbols must match the provider's
+// catalog exactly ("CrudeOIL", not "CRUDEOIL"; "AAPL.us", not "aapl.us").
+var DefaultInstruments = []string{
+	"EURUSD", "GBPUSD", "AUDUSD",
+	"GOLD", "SILVER", "CrudeOIL",
+	"AAPL.us", "TSLA.us", "NVDA.us",
 }
 
 // Load reads configuration from the environment, applying defaults.
 func Load() Config {
 	return Config{
-		RedisURI:   os.Getenv("REDIS_SERVICE_URI"),
-		Assets:     parseAssets(os.Getenv("ASSETS")),
-		Quote:      envOr("PRICE_QUOTE", "USDT"),
-		KeyPrefix:  envOr("PRICE_KEY_PREFIX", "price"),
-		StaleTTL:   envDuration("PRICE_STALE_TTL", 30*time.Second),
-		HealthAddr: envOr("PRICE_HEALTH_ADDR", ":8083"),
+		RedisURI:         os.Getenv("REDIS_SERVICE_URI"),
+		Assets:           parseAssets(os.Getenv("ASSETS")),
+		Quote:            envOr("PRICE_QUOTE", "USDT"),
+		KeyPrefix:        envOr("PRICE_KEY_PREFIX", "price"),
+		StaleTTL:         envDuration("PRICE_STALE_TTL", 30*time.Second),
+		HealthAddr:       envOr("PRICE_HEALTH_ADDR", ":8083"),
+		LiveRatesAPIKey:  strings.TrimSpace(os.Getenv("LIVERATES_API_KEY")),
+		LiveRatesBaseURL: envOr("LIVERATES_BASE_URL", "https://www.live-rates.com"),
+		Instruments:      parseInstruments(os.Getenv("LIVERATES_INSTRUMENTS")),
+		LiveRatesPoll:    envDuration("LIVERATES_POLL_INTERVAL", 2*time.Second),
 	}
 }
 
@@ -74,6 +108,28 @@ func parseAssets(raw string) []string {
 	}
 	if len(out) == 0 {
 		return DefaultAssets
+	}
+	return out
+}
+
+// parseInstruments splits a comma-separated LIVERATES_INSTRUMENTS list,
+// trimming whitespace around each entry but PRESERVING case — the provider's
+// catalog is case-sensitive ("CrudeOIL", "AAPL.us"). Returns DefaultInstruments
+// when empty.
+func parseInstruments(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return DefaultInstruments
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		s := strings.TrimSpace(p)
+		if s != "" {
+			out = append(out, s)
+		}
+	}
+	if len(out) == 0 {
+		return DefaultInstruments
 	}
 	return out
 }
