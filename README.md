@@ -4,6 +4,10 @@ A small standalone service that streams live **index prices** into Redis, so
 every other service (backend, matching engine, bots, frontend API) reads **one
 shared price** instead of each hitting upstream providers independently.
 
+> **Live deployment:** <https://price-fetcher-api.onrender.com>
+> — health & per-asset status at
+> [`/healthz`](https://price-fetcher-api.onrender.com/healthz).
+
 Two feeds, one Redis contract:
 
 - **Crypto** (BTC, ETH, SOL, BNB) — Binance combined WebSocket stream.
@@ -112,6 +116,9 @@ go build -o price-fetcher ./cmd/fetcher && ./price-fetcher
 ```json
 { "ok": true, "assets": { "BTC": { "last": 64711.05, "age_ms": 420, "updated_at": "..." } } }
 ```
+
+Try it on the live instance:
+<https://price-fetcher-api.onrender.com/healthz>
 
 ## Consuming the price (examples)
 
