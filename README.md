@@ -46,7 +46,7 @@ Live-Rates.com REST /api/price ──┘    (this service)    (SET + PUBLISH)
 - Crypto rides ONE WebSocket connection (combined stream) with automatic
   reconnect + exponential backoff and ping/pong keepalive.
 - Non-crypto instruments poll Live-Rates.com `/api/price` every
-  `LIVERATES_POLL_INTERVAL` (default 2s → ~0.5 req/s, safely under their
+  `LIVERATES_POLL_INTERVAL` (default 1s → 1 req/s, at their
   1 req/s fair-use throttle). The published index price is the **bid/ask
   mid**; `change_percent` is vs the session open; `quote_volume` is always 0
   (not provided by live-rates).
@@ -97,7 +97,7 @@ All via environment (or a local `.env`). Only `REDIS_SERVICE_URI` is required.
 | `LIVERATES_API_KEY` | — | Live-Rates.com API key (**required**) — supplies all non-crypto instruments |
 | `LIVERATES_INSTRUMENTS` | built-in list | Non-crypto symbols, **case-sensitive**: `EURUSD,GOLD,CrudeOIL,AAPL.us…` |
 | `LIVERATES_BASE_URL` | `https://www.live-rates.com` | API base; pin `eu.`/`us.`/`as.` regional host for lower latency |
-| `LIVERATES_POLL_INTERVAL` | `2` | REST poll cadence; seconds (`2`) or duration (`2s`) |
+| `LIVERATES_POLL_INTERVAL` | `1` | REST poll cadence; seconds (`1`) or duration (`1s`) |
 
 ## Run
 

@@ -88,7 +88,7 @@ func Load() Config {
 		LiveRatesAPIKey:  strings.TrimSpace(os.Getenv("LIVERATES_API_KEY")),
 		LiveRatesBaseURL: envOr("LIVERATES_BASE_URL", "https://www.live-rates.com"),
 		Instruments:      parseInstruments(os.Getenv("LIVERATES_INSTRUMENTS")),
-		LiveRatesPoll:    envDuration("LIVERATES_POLL_INTERVAL", 2*time.Second),
+		LiveRatesPoll:    envDuration("LIVERATES_POLL_INTERVAL", time.Second),
 	}
 }
 

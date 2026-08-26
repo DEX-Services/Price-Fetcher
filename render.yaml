@@ -77,7 +77,7 @@ services:
       - key: LIVERATES_INSTRUMENTS
         value: EURUSD,GBPUSD,AUDUSD,GOLD,SILVER,CrudeOIL,AAPL.us,TSLA.us,NVDA.us
       - key: LIVERATES_POLL_INTERVAL
-        value: "2"
+        value: "1"
 
     # === Logs ===
     # The fetcher uses log/slog to stdout; Render captures it automatically.
