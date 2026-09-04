@@ -3,3 +3,6 @@
 
 # Local env (contains credentials)
 .env
+
+# macOS
+.DS_Store
