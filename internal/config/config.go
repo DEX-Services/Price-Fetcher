@@ -70,10 +70,18 @@ var DefaultAssets = []string{
 // LIVERATES_INSTRUMENTS is not provided: FX majors, precious metals, energy,
 // and US stocks. Case is significant — symbols must match the provider's
 // catalog exactly ("CrudeOIL", not "CRUDEOIL"; "AAPL.us", not "aapl.us").
+//
+// DISABLED per the 2026-09-11 product decision to launch crypto-only — see
+// matching-engine's markets.go (disabledMarkets) and Dex-Backend/Dex New
+// Frontend's backendMarkets.ts for the matching frontend/engine-side
+// disables. Left empty rather than deleted: cmd/fetcher/main.go's
+// `len(cfg.Instruments) > 0` gate means an empty list turns off the entire
+// Live-Rates poller (no HTTP client, no goroutine, no API key requirement) —
+// re-enabling is restoring this literal, nothing else.
 var DefaultInstruments = []string{
-	"EURUSD", "GBPUSD", "AUDUSD",
-	"GOLD", "SILVER", "CrudeOIL",
-	"AAPL.us", "TSLA.us", "NVDA.us",
+	// "EURUSD", "GBPUSD", "AUDUSD",
+	// "GOLD", "SILVER", "CrudeOIL",
+	// "AAPL.us", "TSLA.us", "NVDA.us",
 }
 
 // Load reads configuration from the environment, applying defaults.
