@@ -2,10 +2,12 @@
 // Redis, giving every other service (backend, matching engine, bots,
 // frontend API) a single shared source of truth for the INDEX price.
 //
-// Two upstream feeds, one Redis contract:
+// Three upstream feeds, one Redis contract:
 //   - Crypto (BTC, ETH, …) streams from Binance's combined WebSocket.
 //   - Non-crypto instruments (FX majors, GOLD/SILVER, CrudeOIL, US stocks)
-//     are polled from the Live-Rates.com REST API.
+//     are polled from the Live-Rates.com REST API. Currently DISABLED
+//     (empty DefaultInstruments) — crypto-only launch, see config.go.
+//   - BI2X polls its own dedicated single-symbol feed (internal/bitdxfeed).
 //
 // This price is used for mark price, funding, and liquidation reference. It is
 // deliberately separate from the order-book last-trade price, which is owned by
@@ -15,12 +17,14 @@
 //
 //	price-fetcher            # reads config from environment / .env
 //
-// Required env:  REDIS_SERVICE_URI, LIVERATES_API_KEY
+// Required env:  REDIS_SERVICE_URI
 // Optional env:  ASSETS (crypto), PRICE_QUOTE, PRICE_KEY_PREFIX,
 //
 //	PRICE_STALE_TTL, PRICE_HEALTH_ADDR,
-//	LIVERATES_INSTRUMENTS, LIVERATES_BASE_URL,
-//	LIVERATES_POLL_INTERVAL
+//	LIVERATES_API_KEY, LIVERATES_INSTRUMENTS, LIVERATES_BASE_URL,
+//	LIVERATES_POLL_INTERVAL,
+//	BITDX_FEED_ENABLED, BITDX_FEED_ASSET, BITDX_FEED_URL,
+//	BITDX_FEED_POLL_INTERVAL
 package main
 
 import (
@@ -35,6 +39,7 @@ import (
 	"time"
 
 	"github.com/dex/price-fetcher/internal/binance"
+	"github.com/dex/price-fetcher/internal/bitdxfeed"
 	"github.com/dex/price-fetcher/internal/config"
 	"github.com/dex/price-fetcher/internal/liverates"
 	"github.com/dex/price-fetcher/internal/price"
@@ -54,6 +59,8 @@ func main() {
 	log.Info("price-fetcher starting",
 		"crypto_assets", cfg.Assets,
 		"instruments", cfg.Instruments,
+		"bitdx_feed_enabled", cfg.BitDxFeedEnabled,
+		"bitdx_feed_asset", cfg.BitDxFeedAsset,
 		"quote", cfg.Quote,
 		"key_prefix", cfg.KeyPrefix,
 		"health_addr", cfg.HealthAddr,
@@ -131,6 +138,16 @@ func main() {
 			cfg.LiveRatesPoll, log,
 		)
 		go lrClient.Run(ctx, onPrice)
+	}
+
+	// BI2X polls its own dedicated single-symbol feed (internal/bitdxfeed),
+	// same shape as the Live-Rates goroutine above: its own poll loop, same
+	// onPrice funnel, so Redis keys/channels/health tracking treat it
+	// identically to every other asset. See BitDxFeedEnabled's doc comment
+	// for the disable-without-a-code-change escape hatch.
+	if cfg.BitDxFeedEnabled {
+		bdClient := bitdxfeed.New(cfg.BitDxFeedAsset, cfg.BitDxFeedURL, cfg.BitDxFeedPoll, log)
+		go bdClient.Run(ctx, onPrice)
 	}
 
 	// Run blocks until ctx is cancelled, reconnecting internally on failure.

@@ -58,6 +58,24 @@ type Config struct {
 	// instruments; keep the average below ~1 req/s (the provider's fair-use
 	// throttle window).
 	LiveRatesPoll time.Duration
+
+	// BitDxFeedEnabled turns the BI2X poller (internal/bitdxfeed) on. On by
+	// default now that a real feed URL exists (2026-09-12); set
+	// BITDX_FEED_ENABLED=false to disable without needing a code change,
+	// same escape hatch LIVERATES_INSTRUMENTS gives the FX/commodity feed.
+	BitDxFeedEnabled bool
+
+	// BitDxFeedAsset is the canonical asset name this feed's price is
+	// published under, e.g. "BI2X" — must match matching-engine's base
+	// currency for the pair (see cmd/engine/markets.go's BI2X-BIUSDB row).
+	BitDxFeedAsset string
+
+	// BitDxFeedURL overrides the feed's base URL. Empty uses the default the
+	// user provided (bitdxfeed.defaultBaseURL).
+	BitDxFeedURL string
+
+	// BitDxFeedPoll is this feed's REST polling cadence.
+	BitDxFeedPoll time.Duration
 }
 
 // DefaultAssets is the tracked crypto set (served by Binance) when ASSETS is
@@ -65,6 +83,15 @@ type Config struct {
 var DefaultAssets = []string{
 	"BTC", "ETH", "SOL", "BNB",
 }
+
+// BI2X (matching-engine's BI2X-BIUSDB spot/futures pair, added 2026-09-12)
+// is NOT a Binance ticker, so it cannot go in DefaultAssets above — that list
+// is hardwired to Binance's <ASSET>USDT stream naming (see cmd/fetcher's
+// Binance subscriber). Its index price instead comes from a dedicated feed
+// (internal/bitdxfeed, wired up 2026-09-12 once the user provided the URL),
+// keyed under the same "price:BI2X" Redis convention every other asset uses
+// so nothing downstream needed to change — see BitDxFeed* fields below.
+const bi2xAsset = "BI2X"
 
 // DefaultInstruments is the NON-crypto set (served by Live-Rates.com) when
 // LIVERATES_INSTRUMENTS is not provided: FX majors, precious metals, energy,
@@ -97,6 +124,10 @@ func Load() Config {
 		LiveRatesBaseURL: envOr("LIVERATES_BASE_URL", "https://www.live-rates.com"),
 		Instruments:      parseInstruments(os.Getenv("LIVERATES_INSTRUMENTS")),
 		LiveRatesPoll:    envDuration("LIVERATES_POLL_INTERVAL", time.Second),
+		BitDxFeedEnabled: envBool("BITDX_FEED_ENABLED", true),
+		BitDxFeedAsset:   envOr("BITDX_FEED_ASSET", bi2xAsset),
+		BitDxFeedURL:     os.Getenv("BITDX_FEED_URL"),
+		BitDxFeedPoll:    envDuration("BITDX_FEED_POLL_INTERVAL", 2*time.Second),
 	}
 }
 
@@ -157,6 +188,18 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func envBool(key string, def bool) bool {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return def
+	}
+	return b
 }
 
 func envDuration(key string, def time.Duration) time.Duration {
