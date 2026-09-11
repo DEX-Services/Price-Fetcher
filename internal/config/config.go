@@ -79,9 +79,17 @@ type Config struct {
 }
 
 // DefaultAssets is the tracked crypto set (served by Binance) when ASSETS is
-// not provided. Mirrors the crypto perps shown in the frontend market list.
+// not provided. Mirrors the exchange's 2026-09-12 market-list restructure:
+// SPOT is BI2X+BTC only (BI2X tracked separately, see bi2xAsset below); the
+// remaining entries here are FUTURES-only — ETH, AVAX, LINK, SOL, DOGE, TAO,
+// ADA, XRP all trade as perps with no spot book (see matching-engine's
+// markets.go/seed.go), but still need a live index price from Binance for
+// mark price/funding/liquidation reference, same as BTC. BNB was removed
+// entirely (was SPOT+FUTURES before this restructure) and is intentionally
+// absent from this list. All six new tickers verified live on Binance
+// (<ASSET>USDT) 2026-09-12.
 var DefaultAssets = []string{
-	"BTC", "ETH", "SOL", "BNB",
+	"BTC", "ETH", "AVAX", "LINK", "SOL", "DOGE", "TAO", "ADA", "XRP",
 }
 
 // BI2X (matching-engine's BI2X-BIUSDB spot/futures pair, added 2026-09-12)
