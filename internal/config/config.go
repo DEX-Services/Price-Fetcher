@@ -67,7 +67,7 @@ type Config struct {
 
 	// BitDxFeedAsset is the canonical asset name this feed's price is
 	// published under, e.g. "BI2X" — must match matching-engine's base
-	// currency for the pair (see cmd/engine/markets.go's BI2X-BIUSDB row).
+	// currency for the pair (see cmd/engine/markets.go's BI2X-BI2XUSD row).
 	BitDxFeedAsset string
 
 	// BitDxFeedURL overrides the feed's base URL. Empty uses the default the
@@ -92,7 +92,7 @@ var DefaultAssets = []string{
 	"BTC", "ETH", "AVAX", "LINK", "SOL", "DOGE", "TAO", "ADA", "XRP",
 }
 
-// BI2X (matching-engine's BI2X-BIUSDB spot/futures pair, added 2026-09-12)
+// BI2X (matching-engine's BI2X-BI2XUSD spot/futures pair, added 2026-09-12)
 // is NOT a Binance ticker, so it cannot go in DefaultAssets above — that list
 // is hardwired to Binance's <ASSET>USDT stream naming (see cmd/fetcher's
 // Binance subscriber). Its index price instead comes from a dedicated feed

@@ -41,12 +41,12 @@ func TestParseFloat(t *testing.T) {
 // normalize on the exact response shape confirmed live from
 // https://bitdx-feed-jk3y.onrender.com/ 2026-09-12:
 //
-//	{"symbol":"BI2X/BIUSDB","rate":"3.29142","high":"3.29507","low":"3.28551",
+//	{"symbol":"BI2X/BI2XUSD","rate":"3.29142","high":"3.29507","low":"3.28551",
 //	 "open":"3.29280","close":"3.29142","volume":"0.05","timestamp":"1789155525000"}
 func TestNormalize(t *testing.T) {
 	c := New("BI2X", "", time.Second, testLogger())
 	q := quoteResponse{
-		Symbol: "BI2X/BIUSDB", Rate: "3.29142", High: "3.29507", Low: "3.28551",
+		Symbol: "BI2X/BI2XUSD", Rate: "3.29142", High: "3.29507", Low: "3.28551",
 		Open: "3.29280", Close: "3.29142", Volume: "0.05", Timestamp: "1789155525000",
 	}
 	p, ok := c.normalize(q)
@@ -98,7 +98,7 @@ func TestFetchQuote(t *testing.T) {
 		gotPath = r.URL.Path
 		gotQuery = r.URL.RawQuery
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"symbol":"BI2X/BIUSDB","rate":"3.29142","high":"3.29507","low":"3.28551","open":"3.29280","close":"3.29142","volume":"0.05","timestamp":"1789155525000"}`))
+		_, _ = w.Write([]byte(`{"symbol":"BI2X/BI2XUSD","rate":"3.29142","high":"3.29507","low":"3.28551","open":"3.29280","close":"3.29142","volume":"0.05","timestamp":"1789155525000"}`))
 	}))
 	defer srv.Close()
 
@@ -138,7 +138,7 @@ func TestFetchNon200(t *testing.T) {
 func TestPollOnceCallsOnPrice(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"symbol":"BI2X/BIUSDB","rate":"3.30","high":"3.31","low":"3.29","open":"3.29","close":"3.30","volume":"1.0","timestamp":"1789155525000"}`))
+		_, _ = w.Write([]byte(`{"symbol":"BI2X/BI2XUSD","rate":"3.30","high":"3.31","low":"3.29","open":"3.29","close":"3.30","volume":"1.0","timestamp":"1789155525000"}`))
 	}))
 	defer srv.Close()
 

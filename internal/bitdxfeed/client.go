@@ -1,8 +1,8 @@
 // Package bitdxfeed polls the BitDx BI2X data-feed API — a single-symbol REST
 // endpoint (https://bitdx-feed-jk3y.onrender.com/) that always returns the
-// current BI2X/BIUSDB rate as one JSON object, no auth required:
+// current BI2X/BI2XUSD rate as one JSON object, no auth required:
 //
-//	{"symbol":"BI2X/BIUSDB","rate":"3.29142","high":"3.29507","low":"3.28551",
+//	{"symbol":"BI2X/BI2XUSD","rate":"3.29142","high":"3.29507","low":"3.28551",
 //	 "open":"3.29280","close":"3.29142","volume":"0.05","timestamp":"1789155525000"}
 //
 // This is a much simpler wire format than Live-Rates.com (internal/liverates):
