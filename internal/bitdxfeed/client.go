@@ -1,5 +1,5 @@
 // Package bitdxfeed polls the BitDx BI2X data-feed API — a single-symbol REST
-// endpoint (https://bitdx-feed-jk3y.onrender.com/) that always returns the
+// endpoint (https://bitdx-feed-ez3b.onrender.com/) that always returns the
 // current BI2X/BI2XUSD rate as one JSON object, no auth required:
 //
 //	{"symbol":"BI2X/BI2XUSD","rate":"3.29142","high":"3.29507","low":"3.28551",
