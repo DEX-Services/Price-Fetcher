@@ -29,8 +29,10 @@ import (
 )
 
 const (
-	// defaultBaseURL is the feed the user provided 2026-09-12 for BI2X.
-	defaultBaseURL = "https://bitdx-feed-jk3y.onrender.com/"
+	// defaultBaseURL is the feed for BI2X. Updated 2026-09-25 after the
+	// original jk3y instance was suspended — the new instance is ez3b.
+	// Overridable via BITDX_FEED_URL without a redeploy if it moves again.
+	defaultBaseURL = "https://bitdx-feed-ez3b.onrender.com/"
 
 	httpTimeout  = 10 * time.Second
 	maxBodyBytes = 1 << 16 // response is ~200 bytes; this is generous headroom
