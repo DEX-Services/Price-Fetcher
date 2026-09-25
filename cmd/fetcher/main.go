@@ -3,7 +3,9 @@
 // frontend API) a single shared source of truth for the INDEX price.
 //
 // Three upstream feeds, one Redis contract:
-//   - Crypto (BTC, ETH, …) streams from Binance's combined WebSocket.
+//   - Crypto (BTC, ETH, …) streams from Coinbase Exchange's ticker WebSocket
+//     (switched from Binance 2026-09-25 — Binance blocks this host's
+//     outbound IPs at the WebSocket handshake; see internal/coinbase).
 //   - Non-crypto instruments (FX majors, GOLD/SILVER, CrudeOIL, US stocks)
 //     are polled from the Live-Rates.com REST API. Currently DISABLED
 //     (empty DefaultInstruments) — crypto-only launch, see config.go.
@@ -38,8 +40,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dex/price-fetcher/internal/binance"
 	"github.com/dex/price-fetcher/internal/bitdxfeed"
+	"github.com/dex/price-fetcher/internal/coinbase"
 	"github.com/dex/price-fetcher/internal/config"
 	"github.com/dex/price-fetcher/internal/liverates"
 	"github.com/dex/price-fetcher/internal/price"
@@ -151,7 +153,10 @@ func main() {
 	}
 
 	// Run blocks until ctx is cancelled, reconnecting internally on failure.
-	client := binance.New(cfg.Assets, cfg.Quote, log)
+	// Coinbase Exchange, not Binance (2026-09-25): Binance's WebSocket
+	// gateway blocks this service's hosting provider's outbound IPs at the
+	// handshake — see internal/coinbase's doc comment.
+	client := coinbase.New(cfg.Assets, cfg.Quote, log)
 	client.Run(ctx, onPrice)
 
 	log.Info("price-fetcher shutting down")
